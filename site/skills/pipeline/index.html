@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>investigative-pipeline — lammer.app/skills</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="breadcrumb"><a href="/">lammer.app</a> / <a href="/skills">skills</a> / investigative-pipeline</div>
+    <div class="project-name">investigative-pipeline</div>
+    <div class="project-tagline">
+      <span class="prompt-prefix">$ </span>turn research documents into a queryable evidence database<span class="cursor"></span>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#what">what is this</a>
+    <a href="#start">getting started</a>
+    <a href="#how">how it works</a>
+    <a href="#scripts">scripts</a>
+    <a href="#faq">faq</a>
+    <a href="#formats">data formats</a>
+  </nav>
+
+  <!-- ── WHAT ────────────────────────────────────────────────────────────── -->
+
+  <section id="what">
+    <div class="section-header">
+      <span class="section-prompt">&gt;</span>
+      <span class="section-title">what is this</span>
+    </div>
+
+    <p>A Claude Code skill and Python toolkit for turning research documents — books, articles, depositions, transcripts — into a searchable, queryable evidence database. You point it at a markdown file, it scores sentences for factual density, extracts the keepers into JSONL, and gives you search, timeline, and SQLite query tools on top.</p>
+
+    <p>No external dependencies. Python 3.11+ stdlib only. Everything is files you can read, diff, and edit.</p>
+
+    <p>The typical workflow: you're deep in a research project with dozens of books, hundreds of articles, and scattered transcripts. You want to find every claim about a specific person across all sources, build a chronological timeline, and surface connections between entities. This does that.</p>
+  </section>
+
+  <!-- ── GETTING STARTED ─────────────────────────────────────────────────── -->
+
+  <section id="start">
+    <div class="section-header">
+      <span class="section-prompt">&gt;</span>
+      <span class="section-title">getting started</span>
+    </div>
+
+    <p>Requirements: Python 3.11+. No pip installs needed — everything is stdlib.</p>
+
+    <p><strong style="color: var(--green)">Step 1 — Clone and configure paths</strong></p>
+
+<pre><span class="comment"># Clone the repo</span>
+git clone https://github.com/luxwon/investigative-pipeline
+cd investigative-pipeline
+
+<span class="comment"># Tell it where your project lives and where to write data</span>
+<span class="comment"># Option A: export directly</span>
+export PIPELINE_VAULT=/Users/you/projects/dark-money
+export PIPELINE_ARCHIVE=/Users/you/projects/dark-money/data
+
+<span class="comment"># Option B: put both lines in a .env file at your project root</span>
+echo 'PIPELINE_VAULT=/Users/you/projects/dark-money' >> /Users/you/projects/dark-money/.env
+echo 'PIPELINE_ARCHIVE=/Users/you/projects/dark-money/data' >> /Users/you/projects/dark-money/.env
+
+<span class="comment"># Verify paths loaded correctly</span>
+python3 src/project_paths.py
+<span class="comment"># → VAULT:   /Users/you/projects/dark-money</span>
+<span class="comment"># → ARCHIVE: /Users/you/projects/dark-money/data</span>
+
+<span class="comment"># Create the directory structure</span>
+mkdir -p $PIPELINE_VAULT/{books,sources,config/sources,profiles}
+mkdir -p $PIPELINE_ARCHIVE/{facts,views}</pre>
+
+    <p><strong style="color: var(--green)">Step 2 — Add a source config</strong></p>
+
+    <p>One <code>.toml</code> file per book, article, or document. The filename stem must match the book file (see FAQ). Create it at <code>config/sources/</code> inside your vault:</p>
+
+<pre><span class="comment"># For a book:</span>
+<span class="comment"># config/sources/dark-money.toml ← filename stem = "dark-money"</span>
+<span class="comment"># books/dark-money.md            ← book file stem must match</span>
+
+cat &gt; $PIPELINE_VAULT/config/sources/dark-money.toml &lt;&lt; 'EOF'
+[source]
+id             = "SRC-BOOK-mayer-dark-money"
+ref            = "Mayer, Jane. Dark Money (2016)"
+type           = "book"
+title          = "Dark Money"
+author         = "Jane Mayer"
+year           = 2016
+certainty_base = 8
+is_memoir      = false
+notes          = ""
+EOF</pre>
+
+    <p><strong style="color: var(--green)">Step 3 — Add entity aliases (optional but recommended)</strong></p>
+
+    <p>Entities let you normalize name variations so "J. Koch" and "Charles Koch" resolve to the same person in search results.</p>
+
+<pre>cat &gt; $PIPELINE_VAULT/config/entities.toml &lt;&lt; 'EOF'
+[people.koch-charles]
+canonical = "Charles Koch"
+aliases   = ["C. Koch", "Charles de Ganahl Koch", "Charles G. Koch"]
+
+[people.koch-david]
+canonical = "David Koch"
+aliases   = ["D. Koch", "David H. Koch"]
+
+[orgs.koch-industries]
+canonical = "Koch Industries"
+aliases   = ["Koch Industries Inc.", "Koch Ind.", "Koch"]
+EOF</pre>
+
+    <p><strong style="color: var(--green)">Step 4 — Add your source text</strong></p>
+
+<pre><span class="comment"># EPUB (recommended — much more text than PDF)</span>
+pandoc ~/Downloads/dark-money.epub -t markdown \
+  -o $PIPELINE_VAULT/books/dark-money.md
+
+<span class="comment"># PDF (lower quality — use when EPUB isn't available)</span>
+pdftotext -layout dark-money.pdf $PIPELINE_VAULT/books/dark-money.md
+
+<span class="comment"># Article or deposition — goes in sources/, not books/</span>
+<span class="comment"># (use type = "article" or type = "deposition" in the TOML)</span>
+cp my-article.md $PIPELINE_VAULT/sources/dark-money-nyt-2016.md</pre>
+
+    <p><strong style="color: var(--green)">Step 5 — Extract facts</strong></p>
+
+<pre>python3 src/extract_facts.py $PIPELINE_VAULT/books/dark-money.md
+
+<span class="comment"># Output:</span>
+<span class="comment"># [dark-money] Scanning 6,291 sentences...</span>
+<span class="comment"># [dark-money] Score ≥5: 418 sentences</span>
+<span class="comment"># [dark-money] After dedup: 394 facts</span>
+<span class="comment"># → Writing to: /Users/you/projects/dark-money/data/facts/facts.jsonl</span>
+<span class="comment"># Done. Total facts in store: 394</span></pre>
+
+    <p><strong style="color: var(--green)">Step 6 — Build registry and validate</strong></p>
+
+<pre>python3 src/build_registry.py
+<span class="comment"># → 1 source registered → data/facts/sources.jsonl</span>
+
+python3 src/validate.py
+<span class="comment"># → 394 facts validated, 0 errors, 0 warnings</span></pre>
+
+    <p><strong style="color: var(--green)">Step 7 — Search</strong></p>
+
+<pre><span class="comment"># Full-text search</span>
+python3 src/search_facts.py "Koch brothers" --full
+
+<span class="comment"># Filter by person, year, certainty</span>
+python3 src/search_facts.py --person "Charles Koch" --year 2010 --certainty 7
+
+<span class="comment"># Count facts per tag</span>
+python3 src/search_facts.py --tag "financial" --count
+
+<span class="comment"># Export to JSON for further processing</span>
+python3 src/search_facts.py --person "David Koch" --json &gt; david-koch.json</pre>
+
+    <p><strong style="color: var(--green)">Step 8 — Migrate to SQLite (after corpus is stable)</strong></p>
+
+<pre>python3 src/migrate_to_sqlite.py
+<span class="comment"># → Migrating 394 facts, 1 source, 47 entities...</span>
+<span class="comment"># → evidence.db written</span>
+
+<span class="comment"># Build a chronological timeline</span>
+python3 src/build_timeline.py --full
+<span class="comment"># → timeline.md written</span></pre>
+  </section>
+
+  <!-- ── HOW ─────────────────────────────────────────────────────────────── -->
+
+  <section id="how">
+    <div class="section-header">
+      <span class="section-prompt">&gt;</span>
+      <span class="section-title">how it works</span>
+    </div>
+
+    <div class="ascii-diagram"><pre>
+  books/              sources/              extracts/
+  *.md (EPUB→pandoc)  *.md (articles)       *.md (depositions, transcripts)
+       │                    │                      │
+       └────────────────────┼──────────────────────┘
+                            ▼
+                  <span class="hl">extract_facts.py</span>
+                  sentence scoring (FACTUAL_INDICATORS regex)
+                  entity alias resolution (config/entities.toml)
+                  near-duplicate deduplication (Jaccard)
+                            │
+                  ┌─────────┴──────────┐
+                  ▼                    ▼
+           <span class="hl">facts.jsonl</span>        <span class="hl">sources.jsonl</span>
+           media.jsonl        (build_registry.py)
+                  │
+                  ├── <span class="hl">validate.py</span>        schema checks, cross-reference validation
+                  ├── <span class="hl">generate_views.py</span>  markdown views by year / entity / theme
+                  ├── <span class="hl">migrate_to_sqlite.py</span>
+                  │         │
+                  │   <span class="hl">evidence.db</span>        13-table relational schema
+                  │         │
+                  ├── <span class="hl">search_facts.py</span>    entity / tag / theme / AI queries
+                  └── <span class="hl">build_timeline.py</span>  4-agent chronological timeline.md
+</pre></div>
+
+    <p>The extraction engine scores each sentence against <code>FACTUAL_INDICATORS</code> — regex patterns for years, dollar amounts, named entities, action verbs, and attribution phrases. Sentences above the score threshold become fact candidates. Near-duplicates are removed via Jaccard similarity.</p>
+
+    <p>The pipeline has two phases. During active research, facts live in JSONL — fast to append, human-readable, easy to grep and diff. When you're ready for richer querying, <code>migrate_to_sqlite.py</code> loads the JSONL into a fully relational SQLite database. You can re-migrate at any time as new sources are added.</p>
+  </section>
+
+  <!-- ── SCRIPTS ─────────────────────────────────────────────────────────── -->
+
+  <section id="scripts">
+    <div class="section-header">
+      <span class="section-prompt">&gt;</span>
+      <span class="section-title">scripts</span>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>script</th>
+          <th>what it does</th>
+          <th>when to run it</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>extract_facts.py</td>
+          <td>Scores sentences, extracts facts to facts.jsonl</td>
+          <td>After adding each new source file</td>
+        </tr>
+        <tr>
+          <td>build_registry.py</td>
+          <td>Builds sources.jsonl from config/sources/*.toml</td>
+          <td>After adding or editing a source TOML</td>
+        </tr>
+        <tr>
+          <td>validate.py</td>
+          <td>Checks schema integrity and cross-references</td>
+          <td>After any extraction; use --fix to auto-repair</td>
+        </tr>
+        <tr>
+          <td>generate_views.py</td>
+          <td>Generates markdown views by year, entity, theme</td>
+          <td>When you want browsable markdown summaries</td>
+        </tr>
+        <tr>
+          <td>migrate_to_sqlite.py</td>
+          <td>Loads JSONL into relational SQLite database</td>
+          <td>When corpus is stable; re-run after new extractions</td>
+        </tr>
+        <tr>
+          <td>search_facts.py</td>
+          <td>CLI query tool — entity, tag, theme, AI filters</td>
+          <td>Anytime; works from JSONL or SQLite</td>
+        </tr>
+        <tr>
+          <td>build_timeline.py</td>
+          <td>Generates chronological timeline.md (4-agent pass)</td>
+          <td>After SQLite migration</td>
+        </tr>
+        <tr>
+          <td>project_paths.py</td>
+          <td>Prints resolved paths — run to verify env setup</td>
+          <td>When troubleshooting path issues</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>All scripts accept <code>--help</code>. All paths read from <code>PIPELINE_VAULT</code> and <code>PIPELINE_ARCHIVE</code> environment variables — or from a <code>.env</code> file at your project root.</p>
+  </section>
+
+  <!-- ── FAQ ─────────────────────────────────────────────────────────────── -->
+
+  <section id="faq">
+    <div class="section-header">
+      <span class="section-prompt">&gt;</span>
+      <span class="section-title">faq</span>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Does the source TOML filename have to match the book filename?</p>
+      <p>Yes. The stem of the config file determines which book file the extractor uses. <code>config/sources/dark-money.toml</code> maps to <code>books/dark-money.md</code>. If the names don't match, the extractor won't find the source config and will skip metadata enrichment.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">Extraction ran but I got 0 facts.</p>
+      <p>Three common causes:</p>
+      <p><strong>1. Empty input file.</strong> Check: <code>wc -l books/your-source.md</code>. If it's near zero, pandoc or pdftotext failed silently.</p>
+      <p><strong>2. Score threshold too high.</strong> Default is 5. Try lowering it:</p>
+<pre>python3 src/extract_facts.py books/your-source.md --threshold 3</pre>
+      <p><strong>3. EPUB produced page marker artifacts.</strong> If your EPUB was extracted via HTML (not pandoc spine), you may have <code>--- Page N ---</code> blocks that suppress sentence parsing. Strip them first:</p>
+<pre>python3 -c "
+import re, sys
+text = open(sys.argv[1]).read()
+text = re.sub(r'--- Page \d+ ---\n', '', text)
+open(sys.argv[1], 'w').write(text)
+" books/your-source.md</pre>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">pandoc fails with a parseSpine error on my EPUB.</p>
+      <p>Some EPUBs use raw HTML files instead of the standard spine structure. Extract the EPUB as a zip, find the HTML files, and pandoc from HTML instead:</p>
+<pre>unzip book.epub -d book_extracted/
+<span class="comment"># find the HTML content files (usually in OEBPS/ or OPS/)</span>
+cat book_extracted/OEBPS/chapter*.html &gt; /tmp/book_combined.html
+pandoc /tmp/book_combined.html -t markdown -o books/your-source.md</pre>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">My source is a PDF, not an EPUB.</p>
+<pre>pdftotext -layout source.pdf books/your-source.md</pre>
+      <p>PDF text quality varies. Scanned PDFs (images only) require OCR first: <code>tesseract source.pdf out txt</code> then rename <code>out.txt</code> to your target path. EPUB via pandoc gives substantially more text when available — PDF as a fallback only.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">I have articles or depositions, not books.</p>
+      <p>Same pipeline, different directory and source type. Articles go in <code>sources/</code>, transcripts and depositions in <code>extracts/</code>:</p>
+<pre><span class="comment"># In your source TOML:</span>
+type = "article"     <span class="comment"># or "deposition", "transcript", "document"</span>
+
+<span class="comment"># Run extraction the same way:</span>
+python3 src/extract_facts.py $PIPELINE_VAULT/sources/my-article.md</pre>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How do I map "J. Smith", "Jane A. Smith", and "Jane Smith" to one entity?</p>
+<pre><span class="comment"># config/entities.toml</span>
+[people.smith-jane]
+canonical = "Jane Smith"
+aliases   = ["J. Smith", "Jane A. Smith", "Smith, Jane"]</pre>
+      <p>The extractor resolves all aliases to the canonical name in the <code>people</code> array. Search and SQLite queries use canonical names only.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">JSONL vs SQLite — when do I need to migrate?</p>
+      <p>Stay in JSONL while actively ingesting new sources — it's fast to append and easy to inspect. Migrate to SQLite when you want:</p>
+      <ul>
+        <li>Entity cross-queries (all facts linking two specific people)</li>
+        <li>Timeline generation (<code>build_timeline.py</code> requires SQLite)</li>
+        <li>Theme/thread bucketing</li>
+        <li>AI-powered analysis via <code>search_facts.py --ai</code></li>
+      </ul>
+      <p>The SQLite database is fully rebuilt from JSONL each time, so re-migrating after adding new sources is safe and normal.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How do I search for everything involving a specific person?</p>
+<pre>python3 src/search_facts.py --person "Jane Smith"
+python3 src/search_facts.py --person "Jane Smith" --year 2005 --full
+python3 src/search_facts.py --person "Jane Smith" --certainty 7 --json &gt; output.json</pre>
+      <p><code>--person</code> matches against the canonical <code>people</code> array in each fact. If you're getting no results, check that your entities.toml has the right canonical name and that you've re-run extraction after adding it.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How do I add project-specific themes?</p>
+      <p>Edit the <code>THEMES</code> dict in <code>src/search_facts.py</code> and <code>src/migrate_to_sqlite.py</code>. Both need to match.</p>
+<pre>THEMES = {
+    <span class="string">"financial"</span>: <span class="string">"payments, transfers, accounts, donations, funds, investments"</span>,
+    <span class="string">"legal"</span>:     <span class="string">"filed, charged, indicted, deposed, testified, settlement"</span>,
+    <span class="string">"travel"</span>:    <span class="string">"flights, yacht, jet, hotel, trips, visited"</span>,
+}</pre>
+      <p>Facts are keyword-matched into threads during SQLite migration. Re-run <code>migrate_to_sqlite.py</code> after changing themes.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">What does certainty mean?</p>
+      <p>A 0–10 scale set per source in its TOML (<code>certainty_base</code>), adjustable per fact in <code>facts.jsonl</code>.</p>
+      <ul>
+        <li><strong style="color: var(--green)">8–10</strong> — Court documents, official records, firsthand sworn testimony</li>
+        <li><strong style="color: var(--green)">5–7</strong> — Credible journalism with named sources, corroborated reporting</li>
+        <li><strong style="color: var(--green)">1–4</strong> — Unverified, alleged, single anonymous source, advocacy material</li>
+      </ul>
+      <p>Set <code>certainty_base</code> conservatively in the TOML, then raise individual facts when you have corroborating sources.</p>
+    </div>
+
+    <div class="faq-item">
+      <p class="faq-q">How do I add a second source and keep the facts separate?</p>
+      <p>Each source TOML gets its own file. Each fact's <code>sources</code> array carries the source ID. Just add the new TOML, point extraction at the new book file, and re-run build_registry + validate. Facts from different sources accumulate in the same <code>facts.jsonl</code>.</p>
+<pre>python3 src/extract_facts.py books/second-source.md
+python3 src/build_registry.py
+python3 src/validate.py
+<span class="comment"># Total facts in store: 812  (394 + 418)</span></pre>
+    </div>
+  </section>
+
+  <!-- ── DATA FORMATS ────────────────────────────────────────────────────── -->
+
+  <section id="formats">
+    <div class="section-header">
+      <span class="section-prompt">&gt;</span>
+      <span class="section-title">data formats</span>
+    </div>
+
+    <p>All fact data is newline-delimited JSON (<code>.jsonl</code>). One object per line. Every line is a complete, independent record — you can grep, tail, and sed it directly.</p>
+
+    <p><strong style="color: var(--green)">facts.jsonl</strong> — one fact per line:</p>
+
+<pre>{
+  <span class="string">"id"</span>:            <span class="string">"F-2016-0042"</span>,
+  <span class="string">"claim"</span>:         <span class="string">"Charles Koch donated $2.5M to the Club for Growth PAC in Q3 2016."</span>,
+  <span class="string">"date"</span>:          { <span class="string">"value"</span>: <span class="string">"2016"</span>, <span class="string">"precision"</span>: <span class="string">"year"</span> },
+  <span class="string">"certainty"</span>:     <span class="number">8</span>,
+  <span class="string">"status"</span>:        <span class="string">"confirmed"</span>,
+  <span class="string">"review_status"</span>: <span class="string">"reviewed"</span>,
+  <span class="string">"sources"</span>: [
+    { <span class="string">"source_id"</span>: <span class="string">"SRC-BOOK-mayer-dark-money"</span>, <span class="string">"page"</span>: <span class="string">"142"</span> }
+  ],
+  <span class="string">"people"</span>:        [<span class="string">"Charles Koch"</span>],
+  <span class="string">"places"</span>:        [],
+  <span class="string">"organizations"</span>: [<span class="string">"Club for Growth"</span>],
+  <span class="string">"tags"</span>:          [<span class="string">"financial"</span>, <span class="string">"political"</span>],
+  <span class="string">"created"</span>:       <span class="string">"2025-01-15"</span>,
+  <span class="string">"modified"</span>:      <span class="string">"2025-01-15"</span>
+}</pre>
+
+    <div>
+      <div class="schema-field">
+        <span class="field-name">id</span>
+        <span class="field-desc">F-{YEAR}-{NNNN}. Year is the event date; NNNN is a zero-padded sequence. Auto-assigned.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">claim</span>
+        <span class="field-desc">A single factual statement. Edit manually to clean up extraction artifacts.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">date.value</span>
+        <span class="field-desc">ISO format: YYYY-MM-DD, YYYY-MM, or YYYY. Auto-extracted from text.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">date.precision</span>
+        <span class="field-desc">exact | month | year | range | undated | approximate</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">certainty</span>
+        <span class="field-desc">0–10. Inherited from source certainty_base. Adjust per-fact as needed.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">status</span>
+        <span class="field-desc">alleged | confirmed | disputed | disproven. Default: alleged.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">sources</span>
+        <span class="field-desc">Array of {source_id, page, quote}. source_id matches the id field in sources.jsonl.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">people / places / orgs</span>
+        <span class="field-desc">Entity arrays. Populated by alias resolution. Canonical names from config/entities.toml.</span>
+      </div>
+      <div class="schema-field">
+        <span class="field-name">tags</span>
+        <span class="field-desc">Free-form tags. Used for theme bucketing during SQLite migration.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>investigative-pipeline &mdash; <a href="https://github.com/luxwon/investigative-pipeline" style="color: var(--green-dim); text-decoration: none;">github.com/luxwon/investigative-pipeline</a> (private)</p>
+  </footer>
+
+</div>
+</body>
+</html>
