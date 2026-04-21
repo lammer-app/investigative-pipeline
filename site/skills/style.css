@@ -1,0 +1,582 @@
+/* lammer.app/skills — skills.sh-inspired theme */
+
+:root {
+  --bg:           #0a0a0a;
+  --bg-muted:     #111111;
+  --bg-code:      #141414;
+  --border:       #1f1f1f;
+  --border-mid:   #2a2a2a;
+  --text:         #fafafa;
+  --text-sec:     #a1a1aa;
+  --text-dim:     #52525b;
+  --green:        #22c55e;
+  --green-bg:     rgba(34,197,94,0.08);
+  --header-h:     56px;
+  --max-w:        1160px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  height: var(--header-h);
+}
+
+.header-inner {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.site-logo {
+  font-family: 'Fira Mono', monospace;
+  font-weight: 500;
+  font-size: 14px;
+  color: var(--text);
+  text-decoration: none;
+  letter-spacing: -0.3px;
+}
+
+.logo-dot { color: var(--green); }
+
+.header-sep { color: var(--text-dim); font-size: 12px; }
+
+.header-breadcrumb-link {
+  color: var(--text-sec);
+  text-decoration: none;
+  font-size: 13px;
+  transition: color 0.15s;
+}
+.header-breadcrumb-link:hover { color: var(--text); }
+
+.header-nav { display: flex; align-items: center; gap: 20px; }
+
+.header-nav a {
+  font-size: 13px;
+  color: var(--text-sec);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.header-nav a:hover { color: var(--text); }
+
+/* ── Page wrapper ───────────────────────────────────────────────────── */
+
+.page-wrap {
+  max-width: var(--max-w);
+  margin: 0 auto;
+  padding: 0 24px 100px;
+}
+
+/* ── Grid ───────────────────────────────────────────────────────────── */
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 228px;
+  gap: 0 56px;
+  align-items: start;
+  margin-top: 40px;
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────────────────── */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Fira Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+}
+
+.breadcrumb a { color: var(--text-dim); text-decoration: none; transition: color 0.15s; }
+.breadcrumb a:hover { color: var(--text-sec); }
+.breadcrumb-cur { color: var(--text-sec); }
+
+/* ── Skill title block ──────────────────────────────────────────────── */
+
+.skill-title {
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  color: var(--text);
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+.skill-subtitle {
+  font-size: 14px;
+  color: var(--text-sec);
+  margin-bottom: 28px;
+  line-height: 1.5;
+}
+
+/* ── Install block ──────────────────────────────────────────────────── */
+
+.install-block {
+  background: var(--bg-muted);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.install-label {
+  font-family: 'Fira Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 9px 16px 7px;
+  border-bottom: 1px solid var(--border);
+}
+
+.install-cmd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px 13px;
+  font-family: 'Fira Mono', monospace;
+  font-size: 13px;
+}
+
+.install-prompt { color: var(--text-dim); user-select: none; }
+.install-cmd code { color: var(--text); }
+
+/* ── Summary box ────────────────────────────────────────────────────── */
+
+.summary-box {
+  background: var(--bg-muted);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 40px;
+}
+
+.summary-intro {
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 500;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.summary-box ul { list-style: none; padding: 0; margin: 0; }
+
+.summary-box li {
+  color: var(--text-sec);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 2px 0;
+}
+
+.summary-box li::before {
+  content: '—';
+  color: var(--text-dim);
+  margin-right: 10px;
+}
+
+/* ── Prose sections ─────────────────────────────────────────────────── */
+
+.prose-section {
+  border-top: 1px solid var(--border);
+  padding: 36px 0;
+}
+
+.section-heading {
+  font-family: 'Fira Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-sec);
+  margin-bottom: 22px;
+}
+
+.subsection-heading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 26px 0 8px;
+}
+
+.prose-section p {
+  color: var(--text-sec);
+  font-size: 13.5px;
+  line-height: 1.7;
+  margin-bottom: 12px;
+  max-width: 600px;
+}
+
+.prose-section p:last-child { margin-bottom: 0; }
+
+.prose-section a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--border-mid);
+  transition: text-decoration-color 0.15s;
+}
+.prose-section a:hover { text-decoration-color: var(--text-sec); }
+
+/* ── Code blocks ────────────────────────────────────────────────────── */
+
+pre {
+  background: var(--bg-code);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 14px 18px;
+  overflow-x: auto;
+  margin: 14px 0;
+  font-family: 'Fira Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+code {
+  font-family: 'Fira Mono', monospace;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+p code, li code, td code, h3 code {
+  background: var(--bg-code);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.comment { color: var(--text-dim); }
+
+/* ── Diagram ────────────────────────────────────────────────────────── */
+
+.diagram-block {
+  background: var(--bg-code);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 14px 0;
+}
+
+.diagram-block pre {
+  background: none;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  color: var(--text-sec);
+}
+
+/* ── Tables ─────────────────────────────────────────────────────────── */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin: 16px 0;
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.data-table th {
+  text-align: left;
+  background: var(--bg-muted);
+  color: var(--text-sec);
+  font-family: 'Fira Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-mid);
+}
+
+.data-table td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-sec);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table td:first-child { color: var(--text); white-space: nowrap; }
+
+/* ── FAQ ────────────────────────────────────────────────────────────── */
+
+.faq-item { padding: 18px 0; border-bottom: 1px solid var(--border); }
+.faq-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+.faq-q {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.faq-item p { margin-bottom: 8px; }
+
+/* ── Sidebar ────────────────────────────────────────────────────────── */
+
+.sidebar {
+  position: sticky;
+  top: calc(var(--header-h) + 24px);
+}
+
+.sidebar-row {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-row:first-child { padding-top: 0; }
+.sidebar-row:last-child { border-bottom: none; }
+
+.sidebar-label {
+  font-family: 'Fira Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.sidebar-value {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sidebar-dim { color: var(--text-sec); }
+
+.sidebar-link {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-mid);
+  transition: border-color 0.15s;
+}
+.sidebar-link:hover { border-color: var(--text-sec); }
+
+.badge {
+  font-family: 'Fira Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-mid);
+  color: var(--text-dim);
+}
+
+.sidebar-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.tag {
+  font-family: 'Fira Mono', monospace;
+  font-size: 11px;
+  color: var(--text-sec);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+/* ── Skills directory page ──────────────────────────────────────────── */
+
+.dir-hero {
+  padding: 64px 0 48px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dir-title {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.dir-subtitle {
+  font-size: 14px;
+  color: var(--text-sec);
+  max-width: 480px;
+  line-height: 1.6;
+}
+
+.search-wrap {
+  margin-top: 24px;
+  position: relative;
+  max-width: 400px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-mid);
+  border-radius: 8px;
+  padding: 9px 14px 9px 36px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.search-input::placeholder { color: var(--text-dim); }
+.search-input:focus { border-color: #3f3f46; }
+
+.skills-list {
+  margin-top: 32px;
+}
+
+.skill-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s;
+}
+
+.skill-card:first-child { border-top: 1px solid var(--border); }
+
+.skill-card:hover .card-name { color: var(--green); }
+
+.card-left { min-width: 0; }
+
+.card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+  transition: color 0.15s;
+  font-family: 'Fira Mono', monospace;
+}
+
+.card-desc {
+  font-size: 13px;
+  color: var(--text-sec);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.card-lang {
+  font-family: 'Fira Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.card-arrow {
+  color: var(--text-dim);
+  font-size: 16px;
+}
+
+.no-results {
+  display: none;
+  color: var(--text-sec);
+  font-size: 13px;
+  padding: 32px 0;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 16px;
+    margin-bottom: 40px;
+  }
+
+  .sidebar-row {
+    padding: 12px 0;
+    border-bottom: none;
+    border-right: 1px solid var(--border);
+  }
+
+  .sidebar-row:nth-child(even) { border-right: none; padding-left: 16px; }
+  .sidebar-row:nth-child(n+7) { border-top: 1px solid var(--border); }
+}
+
+@media (max-width: 600px) {
+  .page-wrap { padding: 0 16px 60px; }
+  .skill-title { font-size: 24px; }
+  .dir-title { font-size: 22px; }
+  .header-inner { padding: 0 16px; }
+  .sidebar { grid-template-columns: 1fr; }
+  .sidebar-row { border-right: none !important; padding-left: 0 !important; border-bottom: 1px solid var(--border) !important; }
+}
