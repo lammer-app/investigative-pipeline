@@ -47,281 +47,98 @@
       </div>
 
       <div class="summary-box">
-        <p class="summary-intro">Scripts for building and querying a facts database from research documents, books, and media — designed for use with Claude Code in long-form investigative research.</p>
+        <p class="summary-intro">Two pieces: a Python extraction script that turns source documents into a structured facts database, and a Claude Code skill that gives Claude Code direct access to query it.</p>
         <ul>
+          <li>Ingestion scripts included for EPUB, PDF, Kindle, articles, YouTube, and audio</li>
+          <li>Facts stored as JSONL — plain files, grep-friendly, no database to manage</li>
+          <li>Claude Code reads the facts database to answer research questions and generate drafts</li>
           <li>No external dependencies — Python 3.11+ stdlib only</li>
-          <li>Everything is plain files you can grep, diff, and edit</li>
-          <li>Handles EPUB, PDF, Kindle, articles, YouTube, and audio</li>
-          <li>JSONL during active research; SQLite when the corpus is stable</li>
         </ul>
       </div>
 
       <!-- ── OVERVIEW ─────────────────────────────────────────────── -->
       <section class="prose-section">
         <h2 class="section-heading">Overview</h2>
-        <p>An extraction and query layer for long-form investigative research, designed to work alongside Claude Code. Point it at a source — book, article, deposition, transcript, or audio file — and it scores sentences for factual density, extracts keepers into a JSONL facts store, and gives you search, timeline, and SQLite query tools on top. Ingestion scripts for EPUB, PDF, Kindle, web articles, YouTube, and audio are included.</p>
-        <p>Useful for investigative journalism, academic research, legal discovery, or any project where evidence accumulates across many sources and cross-referencing entities across the full corpus matters. Claude Code can query the database directly to answer research questions, surface connections, and generate annotated drafts from verified facts.</p>
-        <p>Scales from one document to thousands — same workflow either way. Set <code>PIPELINE_VAULT</code> and <code>PIPELINE_ARCHIVE</code>, add a TOML per source, run <code>extract_facts.py</code>, search with <code>search_facts.py</code>.</p>
-      </section>
-
-      <!-- ── GETTING STARTED ──────────────────────────────────────── -->
-      <section class="prose-section">
-        <h2 class="section-heading">Getting Started</h2>
-        <p>Requirements: Python 3.11+. No pip installs needed.</p>
-
-        <h3 class="subsection-heading">1 — Configure paths</h3>
-<pre><code><span class="comment"># Tell the pipeline where your project lives</span>
-export PIPELINE_VAULT=/Users/you/projects/dark-money
-export PIPELINE_ARCHIVE=/Users/you/projects/dark-money/data
-
-<span class="comment"># Or put both lines in a .env file at your project root</span>
-echo 'PIPELINE_VAULT=/Users/you/projects/dark-money' &gt;&gt; .env
-
-<span class="comment"># Verify, then create the directory structure</span>
-python3 src/project_paths.py
-mkdir -p $PIPELINE_VAULT/{books,sources,extracts,config/sources}
-mkdir -p $PIPELINE_ARCHIVE/{facts,views}</code></pre>
-
-        <h3 class="subsection-heading">2 — Add a source config</h3>
-        <p>One <code>.toml</code> per source. The filename stem must match the book/source file.</p>
-<pre><code><span class="comment"># config/sources/dark-money.toml  ←  maps to books/dark-money.md</span>
-cat &gt; $PIPELINE_VAULT/config/sources/dark-money.toml &lt;&lt; 'EOF'
-[source]
-id             = "SRC-BOOK-mayer-dark-money"
-ref            = "Mayer, Jane. Dark Money (2016)"
-type           = "book"
-author         = "Jane Mayer"
-year           = 2016
-certainty_base = 8
-is_memoir      = false
-EOF</code></pre>
-
-        <h3 class="subsection-heading">3 — Add entity aliases (optional)</h3>
-<pre><code><span class="comment"># config/entities.toml — normalizes name variants in search</span>
-cat &gt; $PIPELINE_VAULT/config/entities.toml &lt;&lt; 'EOF'
-[people.koch-charles]
-canonical = "Charles Koch"
-aliases   = ["C. Koch", "Charles de Ganahl Koch"]
-
-[orgs.koch-industries]
-canonical = "Koch Industries"
-aliases   = ["Koch Industries Inc.", "Koch Ind."]
-EOF</code></pre>
-
-        <h3 class="subsection-heading">4 — Convert source and extract facts</h3>
-<pre><code><span class="comment"># EPUB (recommended — see Ingestion section for other formats)</span>
-pandoc ~/Downloads/dark-money.epub -t markdown \
-  -o $PIPELINE_VAULT/books/dark-money.md
-
-<span class="comment"># Extract facts from the converted file</span>
-python3 src/extract_facts.py $PIPELINE_VAULT/books/dark-money.md
-<span class="comment"># → [dark-money] Scanning 6,291 sentences...</span>
-<span class="comment"># → [dark-money] After dedup: 394 facts</span>
-<span class="comment"># → Done. Total facts in store: 394</span>
-
-python3 src/build_registry.py
-python3 src/validate.py
-<span class="comment"># → 394 facts validated, 0 errors</span></code></pre>
-
-        <h3 class="subsection-heading">5 — Search and query</h3>
-<pre><code>python3 src/search_facts.py "Koch brothers" --full
-python3 src/search_facts.py --person "Charles Koch" --year 2010
-python3 src/search_facts.py --person "Charles Koch" --json &gt; charles-koch.json
-
-<span class="comment"># When corpus is stable: migrate to SQLite and build timeline</span>
-python3 src/migrate_to_sqlite.py
-python3 src/build_timeline.py --full</code></pre>
+        <p>For research projects where evidence accumulates across many sources — books, court filings, depositions, transcripts, articles — and you need Claude Code to reason across all of it at once.</p>
+        <p>The extraction script reads source documents in markdown format and scores each sentence for factual density: named entities, dates, dollar amounts, attribution phrases. Sentences above the threshold become facts, each tagged with source, certainty, people, places, and organizations. They accumulate into a single <code>facts.jsonl</code> file across all sources.</p>
+        <p>The Claude Code skill points Claude at that database. From there, Claude can find every fact about a person across all sources, build timelines, surface connections, and generate annotated drafts with citations — all from a verified, source-linked corpus rather than from memory.</p>
       </section>
 
       <!-- ── INGESTION ─────────────────────────────────────────────── -->
       <section class="prose-section">
-        <h2 class="section-heading">Ingestion Pathways</h2>
-        <p>The extractor reads plain markdown. Convert your source to <code>.md</code> first using the method below that matches your format.</p>
-
-        <h3 class="subsection-heading">EPUB</h3>
-        <p>Use this whenever available. Pandoc extracts structured text — 2–10x more content than a PDF scan.</p>
-<pre><code>pandoc ~/Downloads/book.epub -t markdown -o $PIPELINE_VAULT/books/book.md
-
-<span class="comment"># If pandoc fails with "parseSpine" error, the EPUB uses raw HTML files.</span>
-<span class="comment"># Unzip and convert the HTML chapters instead:</span>
-unzip book.epub -d /tmp/book_extracted/
-cat /tmp/book_extracted/OEBPS/chapter*.html &gt; /tmp/combined.html
-pandoc /tmp/combined.html -t markdown -o $PIPELINE_VAULT/books/book.md
-
-<span class="comment"># If HTML extraction left "--- Page N ---" markers that cause 0 facts:</span>
-python3 -c "
-import re, sys
-t = open(sys.argv[1]).read()
-t = re.sub(r'--- Page \d+ ---\n', '', t)
-open(sys.argv[1], 'w').write(t)
-" $PIPELINE_VAULT/books/book.md</code></pre>
-
-        <h3 class="subsection-heading">PDF (text-based)</h3>
-<pre><code><span class="comment"># brew install poppler</span>
-pdftotext -layout source.pdf $PIPELINE_VAULT/books/source.md
-<span class="comment"># If output is garbage characters, it's a scanned PDF — use OCR below</span></code></pre>
-
-        <h3 class="subsection-heading">PDF (scanned)</h3>
-<pre><code><span class="comment"># brew install tesseract</span>
-tesseract source.pdf source txt
-cp source.txt $PIPELINE_VAULT/sources/source.md
-
-<span class="comment"># Multi-page: convert to images first</span>
-pdftoppm -r 300 source.pdf /tmp/pages/page
-for f in /tmp/pages/*.ppm; do tesseract "$f" "${f%.ppm}" txt; done
-cat /tmp/pages/*.txt &gt; $PIPELINE_VAULT/sources/source.md</code></pre>
-
-        <h3 class="subsection-heading">Kindle</h3>
-        <p>Use <a href="https://github.com/transitive-bullshit/kindle-ai-export" target="_blank">kindle-ai-export</a> — Playwright screenshots Kindle Web Reader and extracts text via GPT-4 vision. Log into reads.amazon.com first.</p>
-<pre><code>git clone https://github.com/transitive-bullshit/kindle-ai-export
-cd kindle-ai-export &amp;&amp; npm install
-
-<span class="comment"># Find the ASIN (B0... code) in the Amazon book URL</span>
-npx kindle-ai-export --asin B09XXXXXXXX --output /tmp/book.md
-cp /tmp/book.md $PIPELINE_VAULT/books/book.md
-
-<span class="comment"># Timeout? Add --timeout 60000. Session expired? Re-login to reads.amazon.com</span></code></pre>
-
-        <h3 class="subsection-heading">Web article</h3>
-<pre><code><span class="comment"># Open-access pages — pandoc fetches and converts directly:</span>
-pandoc "https://example.com/article" -t markdown \
-  -o $PIPELINE_VAULT/sources/article-slug.md
-
-<span class="comment"># Blocked by user-agent? Use curl first:</span>
-curl -sL -A "Mozilla/5.0" "https://example.com/article" | \
-  pandoc -f html -t markdown -o $PIPELINE_VAULT/sources/article-slug.md
-
-<span class="comment"># Paywalled: open in browser reader mode, select all, paste into .md</span>
-<span class="comment"># Set type = "article" in the TOML. Articles go in sources/, not books/</span></code></pre>
-
-        <h3 class="subsection-heading">YouTube video</h3>
-<pre><code><span class="comment"># brew install yt-dlp</span>
-yt-dlp --write-auto-sub --sub-lang en --skip-download \
-  --output "/tmp/%(title)s" "https://youtube.com/watch?v=VIDEO_ID"
-
-<span class="comment"># Convert VTT to clean text (strip timecodes, deduplicate lines):</span>
-python3 -c "
-import re, sys
-lines = open(sys.argv[1]).readlines()
-seen, out = set(), []
-for line in lines:
-    line = line.strip()
-    if '--&gt;' in line or not line or line.startswith('WEBVTT'): continue
-    line = re.sub(r'&lt;[^&gt;]+&gt;', '', line)
-    if line and line not in seen:
-        seen.add(line); out.append(line)
-print('\n'.join(out))
-" /tmp/video.en.vtt &gt; $PIPELINE_VAULT/sources/video-title.md</code></pre>
-
-        <h3 class="subsection-heading">Audio / deposition / podcast</h3>
-<pre><code><span class="comment"># Option A: Whisper — local, free, no API key</span>
-<span class="comment"># pip install openai-whisper &amp;&amp; brew install ffmpeg</span>
-whisper audio.mp3 --model medium --output_format txt --output_dir /tmp/
-cp /tmp/audio.txt $PIPELINE_VAULT/extracts/deposition-name.md
-
-<span class="comment"># Option B: AssemblyAI — API, speaker diarization</span>
-<span class="comment"># pip install assemblyai</span>
-python3 &lt;&lt; 'EOF'
-import assemblyai as aai
-aai.settings.api_key = "YOUR_KEY"
-t = aai.Transcriber().transcribe("audio.mp3",
-    aai.TranscriptionConfig(speaker_labels=True))
-with open("$PIPELINE_VAULT/extracts/name.md", "w") as f:
-    for utt in t.utterances:
-        f.write(f"[Speaker {utt.speaker}] {utt.text}\n\n")
-EOF
-
-<span class="comment"># Set type = "deposition" or "transcript". Depositions go in extracts/</span></code></pre>
-      </section>
-
-      <!-- ── HOW IT WORKS ──────────────────────────────────────────── -->
-      <section class="prose-section">
-        <h2 class="section-heading">How It Works</h2>
-
-        <div class="diagram-block"><pre>  books/           sources/          extracts/
-  (EPUB→pandoc)    (articles)        (depositions, transcripts)
-       │                │                    │
-       └────────────────┼────────────────────┘
-                        ▼
-              extract_facts.py
-              sentence scoring (FACTUAL_INDICATORS regex)
-              entity alias resolution (config/entities.toml)
-              near-duplicate deduplication (Jaccard)
-                        │
-              ┌─────────┴──────────┐
-              ▼                    ▼
-       facts.jsonl           sources.jsonl
-       media.jsonl           (build_registry.py)
-              │
-              ├── validate.py          schema checks + cross-reference
-              ├── generate_views.py    markdown views by year/entity/theme
-              ├── migrate_to_sqlite.py
-              │         │
-              │    evidence.db         13-table relational schema
-              │         │
-              ├── search_facts.py      entity / tag / theme queries
-              └── build_timeline.py   chronological timeline.md</pre></div>
-
-        <p>The extraction engine scores each sentence against <code>FACTUAL_INDICATORS</code> — regex patterns for years, dollar amounts, named entities, action verbs, and attribution phrases. Sentences above the score threshold (default: 5) become fact candidates. Near-duplicates are removed via Jaccard similarity.</p>
-        <p>Two phases: JSONL during active research (fast to append, easy to grep), SQLite when you're ready for richer querying. Re-migrate at any time as sources accumulate.</p>
-      </section>
-
-      <!-- ── SCRIPTS ───────────────────────────────────────────────── -->
-      <section class="prose-section">
-        <h2 class="section-heading">Scripts</h2>
+        <h2 class="section-heading">Ingestion</h2>
+        <p>The extractor reads plain markdown. Ingestion scripts in <code>src/ingest/</code> handle the conversion from each source format:</p>
 
         <table class="data-table">
           <thead>
             <tr>
-              <th>Script</th>
-              <th>What it does</th>
-              <th>When to run</th>
+              <th>Format</th>
+              <th>Method</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><code>extract_facts.py</code></td>
-              <td>Scores sentences, extracts facts to facts.jsonl</td>
-              <td>After each new source</td>
+              <td>EPUB</td>
+              <td><code>pandoc book.epub -t markdown</code></td>
+              <td>Preferred — 2–10x more text than PDF scans</td>
             </tr>
             <tr>
-              <td><code>build_registry.py</code></td>
-              <td>Builds sources.jsonl from config/sources/*.toml</td>
-              <td>After adding or editing a TOML</td>
+              <td>PDF (text)</td>
+              <td><code>pdftotext -layout</code></td>
+              <td>Poppler. Falls back to OCR if output is garbled.</td>
             </tr>
             <tr>
-              <td><code>validate.py</code></td>
-              <td>Schema integrity and cross-reference checks</td>
-              <td>After any extraction; <code>--fix</code> to auto-repair</td>
+              <td>PDF (scanned)</td>
+              <td><code>tesseract</code></td>
+              <td>OCR. Multi-page: convert to images first.</td>
             </tr>
             <tr>
-              <td><code>generate_views.py</code></td>
-              <td>Markdown views by year, entity, theme</td>
-              <td>For browsable summaries</td>
+              <td>Kindle</td>
+              <td><a href="https://github.com/transitive-bullshit/kindle-ai-export" target="_blank">kindle-ai-export</a></td>
+              <td>Playwright + GPT-4 vision. Requires Amazon login.</td>
             </tr>
             <tr>
-              <td><code>migrate_to_sqlite.py</code></td>
-              <td>Loads JSONL into relational SQLite database</td>
-              <td>When corpus is stable; safe to re-run</td>
+              <td>Web article</td>
+              <td><code>pandoc URL -t markdown</code></td>
+              <td>Paywalled: paste from reader mode.</td>
             </tr>
             <tr>
-              <td><code>search_facts.py</code></td>
-              <td>CLI query: entity, tag, theme, AI filters</td>
-              <td>Anytime; works from JSONL or SQLite</td>
+              <td>YouTube</td>
+              <td><code>yt-dlp --write-auto-sub</code></td>
+              <td>VTT → stripped markdown via included script.</td>
             </tr>
             <tr>
-              <td><code>build_timeline.py</code></td>
-              <td>Chronological timeline.md (4-agent pass)</td>
-              <td>After SQLite migration</td>
-            </tr>
-            <tr>
-              <td><code>project_paths.py</code></td>
-              <td>Prints resolved paths</td>
-              <td>Troubleshooting path issues</td>
+              <td>Audio / deposition</td>
+              <td>Whisper or AssemblyAI</td>
+              <td>AssemblyAI for speaker diarization.</td>
             </tr>
           </tbody>
         </table>
-        <p>All scripts accept <code>--help</code>. Paths read from <code>PIPELINE_VAULT</code> and <code>PIPELINE_ARCHIVE</code> env vars, or from a <code>.env</code> file at your project root.</p>
+
+        <p>Each source gets a small <code>.toml</code> config that records author, year, type, and certainty level. The extractor reads these to tag each extracted fact with its provenance.</p>
+      </section>
+
+      <!-- ── THE TWO PIECES ────────────────────────────────────────── -->
+      <section class="prose-section">
+        <h2 class="section-heading">The two pieces</h2>
+
+        <h3 class="subsection-heading">1 — extract_facts.py</h3>
+        <p>The extraction script. Point it at a markdown file, it scores sentences for factual density, deduplicates near-matches via Jaccard similarity, and appends results to <code>facts.jsonl</code>. Run it once per source. Facts accumulate across runs — 1 document or 1,000, same command.</p>
+<pre><code>python3 src/extract_facts.py books/dark-money.md
+<span class="comment"># → Scanning 6,291 sentences...</span>
+<span class="comment"># → After dedup: 394 facts. Total in store: 394</span></code></pre>
+        <p>Each fact in the output carries: claim text, date, certainty (0–10), status, source IDs, and entity arrays for people, places, and organizations. Certainty is inherited from the source config and adjustable per-fact.</p>
+
+        <h3 class="subsection-heading">2 — The Claude Code skill</h3>
+        <p>A markdown skill file that teaches Claude Code how to work with the facts database. Drop it into your <code>.claude/skills/</code> directory and Claude Code can query <code>facts.jsonl</code> directly — by person, date range, organization, tag, or free text — and use the results to answer questions, surface connections, and generate source-linked drafts.</p>
+<pre><code><span class="comment"># .claude/skills/research-db.md</span>
+<span class="comment"># Loaded automatically when Claude Code starts in your project</span>
+
+python3 src/search_facts.py "Charles Koch" --full
+python3 src/search_facts.py --person "Charles Koch" --year 2010
+python3 src/search_facts.py --person "Charles Koch" --json</code></pre>
+        <p>When the corpus is stable, migrate to SQLite for relational queries and timeline generation. The migration is safe to re-run at any point as sources accumulate.</p>
       </section>
 
       <!-- ── FAQ ──────────────────────────────────────────────────── -->
@@ -329,83 +146,29 @@ EOF
         <h2 class="section-heading">FAQ</h2>
 
         <div class="faq-item">
-          <h3 class="faq-q">Does the source TOML filename have to match the book filename?</h3>
-          <p>Yes. The stem of the config file maps to the source file. <code>config/sources/dark-money.toml</code> maps to <code>books/dark-money.md</code>. Mismatched names cause silent metadata skips.</p>
+          <h3 class="faq-q">What's the certainty scale?</h3>
+          <p>0–10, set per source in its config. 8–10: court documents, sworn testimony. 5–7: credible journalism with named sources. 1–4: unverified or single anonymous source. Set conservatively at the source level; raise per-fact when corroborated.</p>
         </div>
 
         <div class="faq-item">
           <h3 class="faq-q">Extraction ran but I got 0 facts.</h3>
-          <p><strong>1.</strong> Empty input — check <code>wc -l books/source.md</code>. If near zero, conversion failed silently. <strong>2.</strong> Threshold too high — try <code>--threshold 3</code>. <strong>3.</strong> Page marker artifacts from HTML EPUB extraction — strip <code>--- Page N ---</code> lines (see Ingestion section).</p>
+          <p>Three causes: empty input (check <code>wc -l</code> on the markdown file — conversion may have failed silently), score threshold too high (try <code>--threshold 3</code>), or page-marker artifacts from HTML EPUB extraction (strip <code>--- Page N ---</code> lines before running).</p>
         </div>
 
         <div class="faq-item">
           <h3 class="faq-q">pandoc fails with a parseSpine error on my EPUB.</h3>
-          <p>Some EPUBs use raw HTML page files instead of the standard spine structure. Unzip the EPUB and convert the HTML chapters directly — see the EPUB ingestion section above.</p>
+          <p>Some EPUBs use raw HTML page files instead of the standard spine structure. Unzip the EPUB and convert the HTML chapters directly — the README has the command.</p>
         </div>
 
         <div class="faq-item">
-          <h3 class="faq-q">How do I map name variants to one entity?</h3>
-<pre><code><span class="comment"># config/entities.toml</span>
-[people.smith-jane]
-canonical = "Jane Smith"
-aliases   = ["J. Smith", "Jane A. Smith", "Smith, Jane"]</code></pre>
-          <p>The extractor resolves all aliases to the canonical name. Re-run extraction after updating <code>entities.toml</code> to apply changes.</p>
+          <h3 class="faq-q">How do I normalize name variants across sources?</h3>
+          <p>Add aliases to <code>config/entities.toml</code>. The extractor resolves all aliases to the canonical name at extraction time, so searches return consistent results regardless of how a name appears in the source text.</p>
         </div>
 
         <div class="faq-item">
-          <h3 class="faq-q">JSONL vs SQLite — when do I need to migrate?</h3>
-          <p>Stay in JSONL while actively ingesting new sources. Migrate to SQLite when you need entity cross-queries, timeline generation, theme bucketing, or AI queries via <code>search_facts.py --ai</code>. The SQLite database is fully rebuilt from JSONL each time — re-migrating is safe and normal.</p>
+          <h3 class="faq-q">JSONL vs SQLite — when do I migrate?</h3>
+          <p>Stay in JSONL while actively ingesting. Migrate to SQLite when you need entity cross-queries, timeline generation, or theme bucketing. The SQLite database is fully rebuilt from JSONL each time — re-migrating is safe and normal.</p>
         </div>
-
-        <div class="faq-item">
-          <h3 class="faq-q">What does certainty mean?</h3>
-          <p>A 0–10 scale set per source in its TOML (<code>certainty_base</code>), adjustable per-fact in <code>facts.jsonl</code>. 8–10: court documents, sworn testimony. 5–7: credible journalism with named sources. 1–4: unverified, single anonymous source. Set conservatively, raise per-fact when corroborated.</p>
-        </div>
-
-        <div class="faq-item">
-          <h3 class="faq-q">How do I add a second source and keep facts separate?</h3>
-          <p>Add a new TOML, point extraction at the new file, re-run build_registry + validate. Each fact's <code>sources</code> array carries its source ID. Facts accumulate in the same <code>facts.jsonl</code>.</p>
-<pre><code>python3 src/extract_facts.py books/second-source.md
-python3 src/build_registry.py &amp;&amp; python3 src/validate.py
-<span class="comment"># Total facts in store: 812  (394 + 418)</span></code></pre>
-        </div>
-      </section>
-
-      <!-- ── DATA FORMATS ─────────────────────────────────────────── -->
-      <section class="prose-section">
-        <h2 class="section-heading">Data Formats</h2>
-        <p>All fact data is newline-delimited JSON (<code>.jsonl</code>) — one object per line, grep and diff friendly. The format is stable; migrate to SQLite at any point for relational queries.</p>
-
-<pre><code>{
-  "id":            "F-2016-0042",
-  "claim":         "Charles Koch donated $2.5M to Club for Growth in Q3 2016.",
-  "date":          { "value": "2016", "precision": "year" },
-  "certainty":     8,
-  "status":        "confirmed",
-  "sources": [
-    { "source_id": "SRC-BOOK-mayer-dark-money", "page": "142" }
-  ],
-  "people":        ["Charles Koch"],
-  "places":        [],
-  "organizations": ["Club for Growth"],
-  "tags":          ["financial", "political"],
-  "created":       "2025-01-15"
-}</code></pre>
-
-        <table class="data-table">
-          <thead>
-            <tr><th>Field</th><th>Description</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>id</code></td><td>F-{YEAR}-{NNNN} — auto-assigned from event date</td></tr>
-            <tr><td><code>claim</code></td><td>Single factual statement. Edit manually to clean up artifacts.</td></tr>
-            <tr><td><code>date.precision</code></td><td>exact | month | year | range | undated | approximate</td></tr>
-            <tr><td><code>certainty</code></td><td>0–10. Inherited from source certainty_base. Adjust per-fact.</td></tr>
-            <tr><td><code>status</code></td><td>alleged | confirmed | disputed | disproven</td></tr>
-            <tr><td><code>sources</code></td><td>Array of {source_id, page, quote}. source_id matches sources.jsonl.</td></tr>
-            <tr><td><code>people/places/orgs</code></td><td>Entity arrays — canonical names from entities.toml</td></tr>
-          </tbody>
-        </table>
       </section>
 
     </main>
@@ -414,7 +177,9 @@ python3 src/build_registry.py &amp;&amp; python3 src/validate.py
     <aside class="sidebar">
       <div class="sidebar-row">
         <div class="sidebar-label">Repository</div>
-        <div class="sidebar-value"><a href="https://github.com/lammer-app/investigative-pipeline" target="_blank" class="sidebar-link">lammer-app/investigative-pipeline</a></div>
+        <div class="sidebar-value">
+          <a href="https://github.com/lammer-app/investigative-pipeline" target="_blank" class="sidebar-link">lammer-app/investigative-pipeline</a>
+        </div>
       </div>
       <div class="sidebar-row">
         <div class="sidebar-label">Language</div>
@@ -433,7 +198,7 @@ python3 src/build_registry.py &amp;&amp; python3 src/validate.py
         <div class="sidebar-value sidebar-dim">MIT</div>
       </div>
       <div class="sidebar-row">
-        <div class="sidebar-label">First published</div>
+        <div class="sidebar-label">Published</div>
         <div class="sidebar-value sidebar-dim">Apr 2026</div>
       </div>
       <div class="sidebar-row">
